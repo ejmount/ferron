@@ -4,7 +4,7 @@ use interprocess::unnamed_pipe::Sender;
 use pyo3::prelude::*;
 use tokio::sync::Mutex;
 
-use crate::ferron_util::preforked_process_pool::write_ipc_message;
+//use crate::ferron_util::preforked_process_pool::write_ipc_message;
 use crate::ferron_util::wsgid_message_structs::ProcessPoolToServerMessage;
 
 #[pyclass]
@@ -21,38 +21,39 @@ impl WsgidErrorStream {
 #[pymethods]
 impl WsgidErrorStream {
   fn write(&self, data: &str) -> PyResult<usize> {
-    write_ipc_message(
-      &mut self.ipc_tx.blocking_lock(),
-      &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
-        application_id: None,
-        status_code: None,
-        headers: None,
-        body_chunk: None,
-        error_log_line: Some(data.to_string()),
-        error_message: None,
-        requests_body_chunk: false,
-      })
-      .map_err(|e| anyhow::anyhow!(e.to_string()))?,
-    )?;
-    Ok(data.len())
+    todo!()
+    //   "",
+    //   &mut self.ipc_tx.blocking_lock(),
+    //   &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+    //     application_id: None,
+    //     status_code: None,
+    //     headers: None,
+    //     body_chunk: None,
+    //     error_log_line: Some(data.to_string()),
+    //     error_message: None,
+    //     requests_body_chunk: false,
+    //   })
+    //   .map_err(|e| anyhow::anyhow!(e.to_string()))?,
+    // )?;
+    // Ok(data.len())
   }
 
   fn writelines(&self, lines: Vec<String>) -> PyResult<()> {
     for line in lines {
       // Each `write_ipc_message` call prints a separate line
-      write_ipc_message(
-        &mut self.ipc_tx.blocking_lock(),
-        &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
-          application_id: None,
-          status_code: None,
-          headers: None,
-          body_chunk: None,
-          error_log_line: Some(line),
-          error_message: None,
-          requests_body_chunk: false,
-        })
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?,
-      )?;
+      //   write_ipc_message(
+      //     &mut self.ipc_tx.blocking_lock(),
+      //     &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+      //       application_id: None,
+      //       status_code: None,
+      //       headers: None,
+      //       body_chunk: None,
+      //       error_log_line: Some(line),
+      //       error_message: None,
+      //       requests_body_chunk: false,
+      //     })
+      //     .map_err(|e| anyhow::anyhow!(e.to_string()))?,
+      //   )?;
     }
     Ok(())
   }
@@ -63,7 +64,7 @@ impl WsgidErrorStream {
   }
 }
 
-#[cfg(test)]
+#[cfg(all(unix, test))]
 mod tests {
   use super::*;
   use crate::ferron_util::preforked_process_pool::read_ipc_message;

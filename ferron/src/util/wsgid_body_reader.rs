@@ -5,7 +5,7 @@ use bytes::BufMut;
 use interprocess::unnamed_pipe::{Recver, Sender};
 use tokio::sync::Mutex;
 
-use crate::ferron_util::preforked_process_pool::{read_ipc_message, write_ipc_message};
+//use crate::ferron_util::preforked_process_pool::{read_ipc_message, write_ipc_message};
 use crate::ferron_util::wsgid_message_structs::{
   ProcessPoolToServerMessage, ServerToProcessPoolMessage,
 };
@@ -44,23 +44,23 @@ impl Read for WsgidBodyReader {
       let mut body_fill_with = Vec::new();
 
       loop {
-        write_ipc_message(
-          tx,
-          &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
-            application_id: None,
-            status_code: None,
-            headers: None,
-            body_chunk: None,
-            error_log_line: None,
-            error_message: None,
-            requests_body_chunk: true,
-          })
-          .map_err(|e| std::io::Error::other(e.to_string()))?,
-        )?;
+        todo!();
+        // write_ipc_message(
+        //   tx,
+        //   &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+        //     application_id: None,
+        //     status_code: None,
+        //     headers: None,
+        //     body_chunk: None,
+        //     error_log_line: None,
+        //     error_message: None,
+        //     requests_body_chunk: true,
+        //   })
+        //   .map_err(|e| std::io::Error::other(e.to_string()))?,
+        // )?;
 
-        let received_message =
-          postcard::from_bytes::<ServerToProcessPoolMessage>(&read_ipc_message(rx)?)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let received_message = postcard::from_bytes::<ServerToProcessPoolMessage>(todo!())
+          .map_err(|e| std::io::Error::other(e.to_string()))?;
         if let Some(body_error_message) = received_message.body_error_message {
           return Err(std::io::Error::other(body_error_message));
         } else if let Some(body_chunk) = received_message.body_chunk {
@@ -86,7 +86,7 @@ impl Read for WsgidBodyReader {
   }
 }
 
-#[cfg(test)]
+#[cfg(all(unix, test))]
 mod tests {
   use super::*;
 

@@ -12,38 +12,27 @@
 // copies or substantial portions of the Software.
 //
 use anyhow::{anyhow, Result};
-
-use std::{borrow::Cow, str};
+use std::str;
 
 pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String> {
-  //const REPLACEMENTS: &[(char, &str)] = &[('\0', ""), ('<', &format!("%{:02X}", '<' as u8))];
-
   if resource == "*" || resource.is_empty() {
     return Ok(resource.to_string());
   }
 
-  // Find the null chars to strip later
+  let mut sanitized = String::with_capacity(resource.len());
 
-  let mut pending_changes = Vec::with_capacity(32);
-  pending_changes.extend(
-    resource
-      .as_bytes()
-      .iter()
-      .enumerate()
-      .filter_map(|(n, &b)| match b as char {
-        '\0' => Some((n..n + 1, Cow::Borrowed(""))),
-        ch @ ('<' | '>' | '^' | '`' | '{' | '|' | '}') => {
-          Some((n..n + 1, Cow::Owned(format!("%{:02X}", ch as u8))))
-        }
-        _ => None,
-      }),
-  );
+  // Remove null bytes and handle initial sanitization
+  for &ch in resource.as_bytes() {
+    if ch != b'\0' {
+      sanitized.push(ch as char);
+    }
+  }
 
   // Check for malformed URL encoding (invalid percent encoding)
-  // (Null bytes will never make this incorrectly succeed when it'd otherwise fail so don't need to have filterd them out yet)
-  let bytes = resource.as_bytes();
-  for (i, b) in bytes.iter().enumerate() {
-    if *b == b'%' {
+  let bytes = sanitized.as_bytes();
+  let mut i = 0;
+  while i < bytes.len() {
+    if bytes[i] == b'%' {
       if i + 2 >= bytes.len() {
         return Err(anyhow!("URI malformed"));
       }
@@ -54,48 +43,65 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
       let value = u8::from_str_radix(str::from_utf8(hex)?, 16)?;
       if value == 0xc0 || value == 0xc1 || value >= 0xfe {
         return Err(anyhow!("URI malformed"));
-      } else if value == 0 {
-        pending_changes.push((i..i + 3, Cow::Borrowed("")));
-      } else if value.is_ascii_alphanumeric()
-        || "!$&'()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_abcdefghijklmnopqrstuvwxyz~"
-          .contains(value as char)
-      {
-        pending_changes.push((i..i + 3, Cow::Owned((value as char).to_string())));
       }
+    }
+    i += 1;
+  }
+
+  // Decode percent-encoded characters while preserving safe ones
+  let mut decoded = String::with_capacity(sanitized.len());
+  let bytes = sanitized.as_bytes();
+  let mut i = 0;
+  while i < bytes.len() {
+    if bytes[i] == b'%' && i + 2 < bytes.len() {
+      let hex = &bytes[i + 1..i + 3];
+      if let Ok(value) = u8::from_str_radix(str::from_utf8(hex)?, 16) {
+        if value != 0 {
+          let decoded_char = value as char;
+          if decoded_char.is_ascii_alphanumeric()
+                        || "!$&'()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_abcdefghijklmnopqrstuvwxyz~"
+                            .contains(decoded_char)
+                    {
+                        decoded.push(decoded_char);
+                    } else {
+                        decoded.push('%');
+                        decoded.push(hex[0] as char);
+                        decoded.push(hex[1] as char);
+                    }
+          i += 2;
+        } else {
+          i += 3;
+          continue;
+        }
+      } else {
+        decoded.push('%');
+      }
+    } else {
+      decoded.push(bytes[i] as char);
+    }
+    i += 1;
+  }
+
+  // Encode unsafe characters
+  let mut encoded = String::with_capacity(decoded.len());
+  for ch in decoded.chars() {
+    match ch {
+      '<' | '>' | '^' | '`' | '{' | '|' | '}' => {
+        encoded.push_str(&format!("%{:02X}", ch as u8));
+      }
+      _ => encoded.push(ch),
     }
   }
 
-  pending_changes.sort_by_key(|(r, _)| r.start);
-
-  let mut divisions = Vec::with_capacity(32);
-
-  let mut covered_index = 0;
-
-  for (index, replacement) in pending_changes {
-    let next_text = Cow::Borrowed(&resource[covered_index..index.start]);
-    divisions.push(next_text);
-    divisions.push(replacement);
-    covered_index = index.end;
-  }
-  if covered_index < resource.len() {
-    divisions.push(Cow::Borrowed(&resource[covered_index..]));
-  }
-
-  let mut decoded = String::with_capacity(resource.len());
-
   // Ensure the resource starts with a slash
-  if !resource.starts_with('/') {
-    decoded.push('/');
-  }
-
-  for d in divisions {
-    decoded.push_str(&d);
+  if !encoded.starts_with('/') {
+    encoded.insert(0, '/');
   }
 
   // Convert backslashes to slashes and handle duplicate slashes
-  let mut final_resource = String::with_capacity(decoded.len());
+  let mut final_resource = String::with_capacity(encoded.len());
   let mut last_was_slash = false;
-  for ch in decoded.chars() {
+  for ch in encoded.chars() {
     if ch == '\\' {
       final_resource.push('/');
       last_was_slash = true;

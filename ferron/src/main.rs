@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 // Import server module from "server.rs"
 #[path = "server.rs"]
 mod ferron_server;
@@ -18,7 +20,7 @@ mod ferron_common;
 
 // Import utility modules from "util" directory
 #[path = "util"]
-mod ferron_util {
+pub mod ferron_util {
   pub mod anti_xss;
   #[cfg(feature = "asgi")]
   pub mod asgi_messages;
@@ -60,6 +62,7 @@ mod ferron_util {
   pub mod split_stream_by_map;
   pub mod ttl_cache;
   pub mod url_sanitizer;
+  pub mod url_sanitizer_old;
   pub mod validate_config;
   #[cfg(feature = "wsgi")]
   pub mod wsgi_error_stream;
@@ -113,7 +116,7 @@ mod ferron_optional_modules {
   pub mod scgi;
   #[cfg(feature = "wsgi")]
   pub mod wsgi;
-  #[cfg(feature = "wsgid")]
+  #[cfg(all(unix, feature = "wsgid"))]
   pub mod wsgid;
 }
 
@@ -331,7 +334,7 @@ fn before_starting_server(
 
         modules_optional_builtin.push(module_name.clone());
       }
-      #[cfg(feature = "wsgid")]
+      #[cfg(all(unix, feature = "wsgid"))]
       "wsgid" => {
         external_modules.push(
           match ferron_optional_modules::wsgid::server_module_init(&yaml_config) {
